@@ -1,5 +1,3 @@
-# CSV File: wget  https://cdn.cs50.net/ai/2023/x/projects/4/shopping.zip 
-
 import csv
 import sys
 
@@ -12,24 +10,18 @@ TEST_SIZE = 0.4
 def main():
 
     # Check command-line arguments
-    if len(sys.argv) not in [2, 3]:
-        sys.exit("Usage: python shopping.py data [k=1]")
-    if len(sys.argv) == 3:
-        try:
-            k = int(sys.argv[2])
-        except ValueError:
-            sys.exit("k setting must be an integer")
-    else:
-        k = 1
+    if len(sys.argv) != 2:
+        sys.exit("Usage: python shopping.py data")
 
     # Load data from spreadsheet and split into train and test sets
     evidence, labels = load_data(sys.argv[1])
+
     X_train, X_test, y_train, y_test = train_test_split(
         evidence, labels, test_size=TEST_SIZE
     )
 
     # Train model and make predictions
-    model = train_model(X_train, y_train, k)
+    model = train_model(X_train, y_train)
     predictions = model.predict(X_test)
     sensitivity, specificity = evaluate(y_test, predictions)
 
@@ -68,73 +60,56 @@ def load_data(filename):
     labels should be the corresponding list of labels, where each label
     is 1 if Revenue is true, and 0 otherwise.
     """
-    # Dictionary Mapping Months to Numerical values
-    months = {'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'June': 5, 'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11}
-
-    # Mapping Visitor Types to integers
-    visitors = {'Returning_Visitor': 1, 'New_Visitor': 0, 'Other': 0}
-
-    # Mapping Boolean Strings to integers
-    bools = {'TRUE': 1, 'FALSE': 0}
-
-    # Create list of lists for evidence, list for labels:
     evidence = []
     labels = []
+    # for converting months (strings) to corresponding ints
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'June', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    month_num = enumerate(months)
+    month = {k: v for v, k in month_num}
 
-    # Open CSV file and load in data as dict:
-    with open(filename, newline='') as csvfile:
-        csvreader = csv.DictReader(csvfile, delimiter=',')
-        print('Loading Data from csv file...')
-        lines = 0
-        for row in csvreader:
+    with open(filename, "r") as raw:
 
-            lines += 1
+        # returns an OrderedDict object for iterating
+        reader = csv.DictReader(raw)
+        for each_row in reader:
 
-            line = []
+            # initializing an empty list and
+            # append values to it after typecasting
+            row = []
+            row.append(int(each_row["Administrative"]))
+            row.append(float(each_row["Administrative_Duration"]))
+            row.append(int(each_row["Informational"]))
+            row.append(float(each_row["Informational_Duration"]))
+            row.append(int(each_row["ProductRelated"]))
+            row.append(float(each_row["ProductRelated_Duration"]))
+            row.append(float(each_row["BounceRates"]))
+            row.append(float(each_row["ExitRates"]))
+            row.append(float(each_row["PageValues"]))
+            row.append(float(each_row["SpecialDay"]))
+            row.append(int(month[each_row["Month"]]))
+            row.append(int(each_row["OperatingSystems"]))
+            row.append(int(each_row["Browser"]))
+            row.append(int(each_row["Region"]))
+            row.append(int(each_row["TrafficType"]))
+            row.append(int(each_row["VisitorType"] == 'Returning_Visitor'))
+            row.append(int(each_row["Weekend"] == 'TRUE'))
+            evidence.append(row)
 
-            # Append Evidence to List of Lists
-            line.append(int(row['Administrative']))
-            line.append(float(row['Administrative_Duration']))
-            line.append(int(row['Informational']))
-            line.append(float(row['Informational_Duration']))
-            line.append(int(row['ProductRelated']))
-            line.append(float(row['ProductRelated_Duration']))
-            line.append(float(row['BounceRates']))
-            line.append(float(row['ExitRates']))
-            line.append(float(row['PageValues']))
-            line.append(float(row['SpecialDay']))
-            line.append(months[row['Month']])
-            line.append(int(row['OperatingSystems']))
-            line.append(int(row['Browser']))
-            line.append(int(row['Region']))
-            line.append(int(row['TrafficType']))
-            line.append(visitors[row['VisitorType']])
-            line.append(bools[row['Weekend']])
+            # append the corresponding label
+            labels.append(int(each_row["Revenue"] == 'TRUE'))
 
-            # Add evidence line to evidence
-            evidence.append(line)
-
-            # Append Labels to List
-            labels.append(bools[row['Revenue']])
-
-        # Confirm data loaded in successfully:
-        if len(evidence) != len(labels):
-            sys.exit('Error when loading data! Evidence length does not match label length')
-
-        print('Data loaded successfully from csv file! Total lines: ', lines)
-
-        return evidence, labels
+    return evidence, labels
 
 
-def train_model(evidence, labels, k):
+def train_model(evidence, labels):
     """
     Given a list of evidence lists and a list of labels, return a
-    fitted k-nearest neighbor model (k=k (default 1)) trained on the data.
+    fitted k-nearest neighbor model (k=1) trained on the data.
     """
 
-    print('Fitting Model using k-Nearest Neighbours Classifier, with k = ', k)
-
-    model = KNeighborsClassifier(n_neighbors=k)
+    # sklearn's K-Nearest Neighbor Classifier
+    # considering 1 neighbor and then, training (fit-ing)
+    model = KNeighborsClassifier(n_neighbors=1)
     model.fit(evidence, labels)
 
     return model
@@ -156,21 +131,33 @@ def evaluate(labels, predictions):
     actual negative labels that were accurately identified.
     """
 
-    pos_labels = labels.count(1)
-    neg_labels = labels.count(0)
+    # total test set size
+    size = len(labels)
+    # total negative examples
+    negatives = 0
+    # total positive examples
+    positives = 0
+    # no. of positives identified as positives
+    true_positives = 0
+    # no. of negatives identified as negatives
+    true_negatives = 0
 
-    correct_positive = 0
-    correct_negative = 0
+    for i in range(size):
 
-    for i in range(len(predictions)):
-        if predictions[i] == labels[i]:
-            if predictions[i] == 1:
-                correct_positive += 1
-            else:
-                correct_negative += 1
+        if labels[i] == 0:
+            negatives += 1
+            if labels[i] == predictions[i]:
+                true_negatives += 1
+        else:
+            positives += 1
+            if labels[i] == predictions[i]:
+                true_positives += 1
 
-    sensitivity = correct_positive / pos_labels
-    specificity = correct_negative / neg_labels
+    # True Positive Rate
+    sensitivity = true_positives / positives
+
+    # True Negative Rate
+    specificity = true_negatives / negatives
 
     return sensitivity, specificity
 
